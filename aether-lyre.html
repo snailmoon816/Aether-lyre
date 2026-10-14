@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>以太琴匣 · 沉浸式琴鍵模擬器</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Noto+Sans+TC:wght@400;500&family=Noto+Serif+TC:wght@600&display=swap" rel="stylesheet">
+<style>
+/* ===== 設計 Token：石板藍 + 古銅金 ===== */
+:root{--ks:64px;--kg:8px;--kr:12px;--ok:#7fd6c2;--bad:#e2776b;color-scheme:dark;
+ /* 夜間（預設）：深石板藍 + 古銅金 */
+ --gold:#c9a45c;--gold2:#f0d68a;--glow:#f0d68a;--lit:#c9a45c;--ink:#e8e2d0;--mute:#9aa3b8;--panel:rgba(20,27,48,.66);
+ --bg0:#0d1224;--bgimg:radial-gradient(ellipse at 30% 0,#2a396a,#0d1224 70%);--ovc:#0a0f20;
+ --field:rgba(5,8,18,.45);--input:rgba(5,8,18,.55);--btn:linear-gradient(#3a3322,#241f14);--onGold:#1b1a14;
+ --keyfill:linear-gradient(160deg,rgba(255,255,255,.12),rgba(255,255,255,.02));--tile:rgba(255,255,255,.05);
+ --cardbg:linear-gradient(160deg,#27345e,#141b32);--toast:#241f14}
+/* 白天：羊皮紙米白 + 深古銅 */
+:root[data-theme=day]{color-scheme:light;
+ --gold:#a57c2c;--gold2:#8a6420;--glow:#e0b040;--lit:#d9a93c;--ink:#2b2418;--mute:#6f6853;--panel:rgba(255,250,236,.74);
+ --bg0:#efe3c4;--bgimg:radial-gradient(ellipse at 30% 0,#fff7df,#e8d9b3 70%);--ovc:#f7f0dc;
+ --field:rgba(120,90,40,.1);--input:rgba(255,255,255,.75);--btn:linear-gradient(#fbf1d6,#ead9a8);--onGold:#fff8e6;
+ --keyfill:linear-gradient(160deg,rgba(255,255,255,.95),rgba(255,243,210,.55));--tile:rgba(120,90,40,.08);
+ --cardbg:linear-gradient(160deg,#fffaf0,#f0e2bf);--toast:#f6e9c7}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;color:var(--ink);font:15px/1.55 "Noto Sans TC",system-ui,sans-serif;background:var(--bg0)}
+#bg,#ov{position:fixed;inset:-24px;z-index:-2;background:center/cover var(--bg0)}
+#bg{background-image:var(--bgimg)}
+#ov{z-index:-1;background:var(--ovc);opacity:.35}
+h1,h2{font-family:Cinzel,"Noto Serif TC",serif;font-weight:600;color:var(--gold2);margin:0;letter-spacing:.04em}
+h1{font-size:26px}h2{font-size:17px;margin-bottom:10px}
+header{max-width:1180px;margin:auto;padding:16px 16px 0;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+.g{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;max-width:1180px;margin:auto;padding:16px}
+@media(max-width:900px){.g{grid-template-columns:1fr}}
+.p{background:var(--panel);border:1px solid rgba(201,164,92,.55);border-radius:14px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:inset 0 0 0 3px rgba(201,164,92,.08),0 10px 30px rgba(0,0,0,.35);padding:16px}
+.b{background:var(--btn);border:1px solid var(--gold);color:var(--gold2);padding:6px 14px;border-radius:8px;cursor:pointer;font:inherit}
+.b:hover,.b.act{background:var(--gold);color:var(--onGold)}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--gold2);outline-offset:2px}
+input[type=text],textarea{width:100%;background:var(--input);border:1px solid rgba(201,164,92,.45);border-radius:8px;color:var(--ink);padding:8px 10px;font:inherit}
+textarea{min-height:110px;resize:vertical;font-family:ui-monospace,Menlo,monospace;letter-spacing:.05em}
+.bar{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;align-items:center}
+.sh{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:center;margin-bottom:14px}
+#np{font-family:Cinzel,"Noto Serif TC",serif;color:var(--gold2);font-size:18px}#nn{display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-height:38px;color:var(--mute)}
+.mk{position:relative;width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;border-radius:9px;border:1px solid var(--gold);background:var(--keyfill);color:var(--ink);font:600 15px Cinzel,serif}
+.mk sup{position:absolute;top:-7px;right:-5px;font-size:14px;line-height:1;color:var(--gold2);text-shadow:0 0 4px var(--bg0)}
+/* HUD */
+.hud{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px;text-align:center}
+.hud div{background:var(--field);border-radius:8px;padding:6px 2px;font-size:12px;color:var(--mute)}
+.hud b{display:block;font-size:20px;color:var(--ink);font-family:Cinzel,serif}
+/* 琴鍵 */
+.row{display:flex;gap:var(--kg);justify-content:center;margin-bottom:var(--kg)}
+.k{width:var(--ks);height:var(--ks);border-radius:var(--kr);border:1px solid var(--gold);background:var(--keyfill);color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;user-select:none;touch-action:none;transition:background .12s,box-shadow .12s,transform .12s}
+.k b{font-family:Cinzel,serif;font-size:calc(var(--ks)*.34)}.k small{color:var(--mute);font-size:calc(var(--ks)*.2)}
+.k.on{background:radial-gradient(circle,#fff3c4,var(--lit));color:#1b1a14;box-shadow:0 0 26px var(--glow);transform:scale(.94)}
+.k.on small{color:#4a3d1c}
+/* 簡譜八度點：高八度點在數字上方，低八度點在下方 */
+[data-dot]{position:relative;display:inline-block;line-height:1}
+[data-dot]::after{content:'';position:absolute;left:50%;width:.2em;height:.2em;margin-left:-.1em;border-radius:50%;background:currentColor}
+[data-dot=up]::after{top:-.32em}[data-dot=down]::after{bottom:-.32em}
+/* 升降記號：按住修飾鍵時，每個琴鍵右上角浮現 ♯ 或 ♭，放開即消失 */
+.k{position:relative}
+.k[data-acc]::before{position:absolute;top:2px;right:calc(var(--ks)*.1);font-size:calc(var(--ks)*.3);line-height:1;font-weight:700;color:var(--gold2)}
+.k[data-acc=up]::before{content:'♯'}.k[data-acc=down]::before{content:'♭'}
+.k.on[data-acc]::before{color:#4a3d1c}
+.k.mod{width:calc(var(--ks)*.95);height:calc(var(--ks)*1.35);border-width:2px}
+.k.mod b{font-size:calc(var(--ks)*.62);line-height:1;color:var(--gold2)}
+.k.hold{background:radial-gradient(circle,#fff3c4,var(--lit));box-shadow:0 0 26px var(--glow)}
+.k.hold b,.k.hold small{color:#1b1a14}
+.k.next{background:linear-gradient(160deg,color-mix(in srgb,var(--glow) 40%,transparent),color-mix(in srgb,var(--glow) 10%,transparent));box-shadow:0 0 14px color-mix(in srgb,var(--glow) 55%,transparent)}
+.k.on.next{background:radial-gradient(circle,#fff3c4,var(--lit));box-shadow:0 0 26px var(--glow)}
+#hint{text-align:center;color:var(--mute);font-size:13px;margin-top:6px;min-height:20px}
+/* 樂譜庫 */
+#ll{list-style:none;margin:0;padding:0;max-height:240px;overflow:auto}
+#ll li{display:flex;gap:4px;align-items:center;padding:3px 0;border-bottom:1px solid rgba(201,164,92,.2)}
+#ll li.cur .nm{color:var(--gold2)}
+.nm{flex:1;display:flex;flex-direction:column;text-align:left;background:none;border:0;color:var(--ink);font:inherit;cursor:pointer;padding:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ic{background:none;border:0;color:var(--mute);cursor:pointer;font-size:15px}.ic:hover{color:var(--gold2)}
+/* 日曆 */
+#cg{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;font-size:13px}
+#cg i{font-style:normal;padding:5px 0;border-radius:6px}.w{color:var(--mute)}
+#cg button{padding:5px 0;border-radius:6px;border:0;font:inherit;cursor:pointer}
+.d{background:var(--tile);color:var(--ink)}.sel{box-shadow:inset 0 0 0 2px var(--gold2)}
+select.b option{background:var(--toast);color:var(--gold2)}
+.nm small{color:var(--mute);font-size:11px}.l1{background:color-mix(in srgb,var(--gold) 30%,transparent)}.l2{background:color-mix(in srgb,var(--gold) 55%,transparent)}.l3{background:color-mix(in srgb,var(--gold) 85%,transparent);color:var(--onGold)}.l4{background:var(--gold2);color:var(--onGold);font-weight:700}
+.t{outline:1px solid var(--ok)}
+.set{display:flex;flex-wrap:wrap;gap:14px 24px;align-items:center;font-size:13px;color:var(--mute)}
+.set label{display:flex;gap:8px;align-items:center}input[type=range]{accent-color:var(--gold)}
+/* 獎勵彈窗 */
+.pop{position:fixed;inset:0;display:none;place-items:center;background:rgba(5,8,18,.72);z-index:20}.pop.show{display:grid}
+.card{position:relative;overflow:hidden;width:min(440px,92vw);text-align:center;padding:34px 24px;background:var(--cardbg);border:2px solid var(--gold);border-radius:18px;box-shadow:0 0 60px rgba(240,214,138,.45);animation:in .5s cubic-bezier(.2,1.4,.4,1)}
+.card h2{font-size:34px}.card p{color:var(--mute);margin:6px 0 18px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}.stats div{background:var(--field);border-radius:10px;padding:10px;font-size:12px;color:var(--mute)}.stats b{display:block;font-size:26px;color:var(--gold2);font-family:Cinzel,serif}
+.star{position:absolute;color:var(--gold2);pointer-events:none;animation:tw 2s infinite}
+.card>*:not(.star){position:relative}
+@keyframes in{from{transform:scale(.6);opacity:0}}
+@keyframes tw{0%,100%{opacity:.1;transform:translateY(8px) scale(.5)}50%{opacity:1;transform:translateY(-10px) scale(1.2)}}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--toast);border:1px solid var(--gold);padding:8px 16px;border-radius:8px;display:none;z-index:30}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style></head>
+<body>
+<div id="bg"></div><div id="ov"></div>
+<header>
+  <h1>以太琴匣</h1>
+  <div class="bar" style="margin:0">
+    <button class="b act" id="mq">三排鍵盤模式</button>
+    <button class="b" id="mn">數字鍵盤模式</button>
+    <button class="b" id="th" aria-pressed="false"></button>
+    <label class="b">上傳背景<input type="file" id="bgf" accept="image/png,image/jpeg" hidden></label>
+  </div>
+</header>
+
+<main class="g">
+  <section class="p">
+    <div class="sh">
+      <div><div id="np">尚未演奏</div><div id="nn">—</div></div>
+      <div class="bar" style="margin:0">
+        <select class="b" id="tm" aria-label="音色">
+          <option value="harp">豎琴</option><option value="piano">鋼琴</option><option value="box">音樂盒</option>
+          <option value="lute">魯特琴</option><option value="violin">提琴</option><option value="xylo">木琴</option>
+        </select>
+        <button class="b" id="bp">自動播放</button>
+        <button class="b" id="bx">練習模式</button>
+        <button class="b" id="bs">停止</button>
+      </div>
+    </div>
+    <div class="hud">
+      <div><b id="hc">0</b>Combo</div><div><b id="hm">0</b>最高 Combo</div>
+      <div><b id="ha">—</b>正確率</div><div><b id="ht">0</b>彈奏音符</div><div><b id="hp">0/0</b>進度</div>
+    </div>
+    <div id="kb"></div><div id="hint"></div>
+  </section>
+
+  <aside class="p">
+    <h2>樂譜庫</h2><ul id="ll"></ul>
+  </aside>
+
+  <section class="p">
+    <h2>樂譜</h2>
+    <input type="text" id="ti" placeholder="樂譜標題" aria-label="樂譜標題">
+    <textarea id="ta" spellcheck="false" placeholder="貼上或輸入樂譜。空格＝下一拍，連寫＝和弦，兩個空格＝休止。"></textarea>
+    <div class="bar">
+      <label class="b">上傳樂譜 (.txt)<input type="file" id="tf" accept=".txt,text/plain" hidden></label>
+      <button class="b" id="sv">儲存樂譜</button>
+      <label class="set">速度 <input type="range" id="bpm" min="40" max="240" value="110"><span id="bv">110</span> BPM</label>
+    </div>
+    <div style="font-size:12px;color:var(--mute)">字母譜：Q–M 為鍵位，音符後加 <code>#</code> 升、<code>_</code> 降。數字譜：1–7，<code>0</code> 休止，<code>1'</code> 高八度、<code>1,</code> 低八度，升降寫在音前（<code>#1</code>、<code>b3</code>），音在字尾時也可寫在後面（<code>3#</code>）。</div>
+  </section>
+
+  <aside class="p">
+    <div style="display:flex;justify-content:space-between;align-items:center"><button class="ic" id="cp" aria-label="上個月">◀</button><h2 id="cm" style="margin:0"></h2><button class="ic" id="cn" aria-label="下個月">▶</button></div>
+    <div id="cg" style="margin:10px 0"></div><div id="cs" style="font-size:12px;color:var(--mute)"></div><div id="cd" style="font-size:13px;margin-top:8px"></div>
+  </aside>
+
+  <section class="p" style="grid-column:1/-1">
+    <h2>外觀設定</h2>
+    <div class="set">
+      <label>琴鍵大小 <input type="range" id="sk" min="40" max="96" value="64"></label>
+      <label>間距 <input type="range" id="sg" min="2" max="24" value="8"></label>
+      <label>圓角 <input type="range" id="sr" min="0" max="32" value="12"></label>
+      <label>背景模糊 <input type="range" id="sb" min="0" max="20" value="0"></label>
+      <label>遮罩濃度 <input type="range" id="so" min="0" max="90" value="35"></label>
+    </div>
+  </section>
+</main>
+
+<div class="pop" id="pop"><div class="card" id="card">
+  <h2 id="pt"></h2><p id="pm"></p><div class="stats" id="ps"></div><button class="b" id="pc">關閉</button>
+</div></div>
+<div id="toast"></div>
+
+<script>
+/* ===== 工具與儲存 ===== */
+const $=s=>document.querySelector(s);
+const load=(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v??d}catch(e){return d}};
+const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+const toast=m=>{const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display='none',2200)};
+
+/* ===== 音階資料 ===== */
+const SEMI=[0,2,4,5,7,9,11];                       // 大調音階半音距離
+const ROWS=[['QWERTYU',2],['ASDFGHJ',1],['ZXCVBNM',0]]; // 高 / 中 / 低音排
+const KEYMAP={};ROWS.forEach(([s,o])=>[...s].forEach((c,i)=>KEYMAP[c]={o,d:i+1}));
+const midi=n=>60+12*(n.o-1)+SEMI[n.d-1]+(n.a||0);   // 中音 1 = C4 (MIDI 60)
+
+/* ===== 狀態 ===== */
+let mode='qwerty',lastOct=0,beats=[],ix=0,run=null,timer=0,need=new Map(),t0=0,st={ok:0,tot:0,combo:0,max:0,n:0},curId=null,cm=new Date(),runName='',runId=null,selDay=null;
+// Numpad 修飾鍵（按住才生效，和 Shift / Ctrl 一樣）：↑ 高八度、↓ 低八度、+ 升半音、− 降半音
+const held=new Set(),MODS=['ArrowUp','ArrowDown','NumpadAdd','NumpadSubtract'];
+const oct=()=>(held.has('ArrowUp')?1:0)-(held.has('ArrowDown')?1:0);
+const acc=()=>(held.has('NumpadAdd')?1:0)-(held.has('NumpadSubtract')?1:0);
+let qacc=0;   // 三排鍵盤模式：Shift=+1、Ctrl=-1（按住才生效）
+const curAcc=()=>mode=='qwerty'?qacc:acc();
+function syncAcc(){   // 依目前按住的修飾鍵，在每個琴鍵上標示 ♯ / ♭
+  const a=curAcc();
+  document.querySelectorAll('.k[data-d]').forEach(b=>{if(a)b.dataset.acc=a>0?'up':'down';else b.removeAttribute('data-acc')})}
+function updQ(e){const a=e.shiftKey?1:e.ctrlKey?-1:0;if(a!==qacc){qacc=a;syncAcc()}}
+const npNote=n=>({o:1+oct(),d:n});   // Numpad 1-7 = 度數 1-7，未按修飾鍵時為中音
+
+/* ===== Web Audio 合成器（豎琴感：基音+泛音，快速起音、指數衰減） ===== */
+let ac;
+const TB={   // p:[泛音倍率,波形,音量] a:起音 d:總長 o:升八度 lp:低通濾波起止 hold:持續時間 vib:顫音
+  harp:{p:[[1,'sine',1],[2,'triangle',.25],[3,'sine',.08]],a:.006,d:1.6,v:.26},
+  piano:{p:[[1,'triangle',1],[1.004,'sine',.35],[2,'sine',.4],[3,'sine',.18],[4,'sine',.08]],a:.004,d:2.2,v:.22,lp:[5200,1400]},
+  box:{o:2,p:[[1,'sine',1],[4,'sine',.3],[5.4,'sine',.15]],a:.002,d:1.3,v:.22},
+  lute:{p:[[1,'sawtooth',.5],[2,'triangle',.3],[3,'sine',.1]],a:.003,d:1.1,v:.22,lp:[3400,500]},
+  violin:{p:[[1,'sawtooth',.7],[2,'sawtooth',.15]],a:.09,d:1.25,hold:.7,vib:1,v:.13,lp:[2600,2600]},
+  xylo:{p:[[1,'sine',1],[3.9,'sine',.35],[9.2,'sine',.1]],a:.002,d:.5,v:.3}};
+let timbre=load('lyre.tm','harp');if(!TB[timbre])timbre='harp';
+function tone(m){
+  const T=TB[timbre];
+  ac=ac||new (window.AudioContext||window.webkitAudioContext)();
+  if(ac.state=='suspended')ac.resume();
+  const f=440*2**((m-69)/12)*(T.o||1),t=ac.currentTime,end=t+T.d,g=ac.createGain();
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(T.v,t+T.a);
+  if(T.hold)g.gain.setValueAtTime(T.v,t+T.hold);
+  g.gain.exponentialRampToValueAtTime(.0001,end);
+  if(T.lp){const q=ac.createBiquadFilter();q.type='lowpass';q.frequency.setValueAtTime(T.lp[0],t);q.frequency.exponentialRampToValueAtTime(T.lp[1],end);g.connect(q);q.connect(ac.destination)}
+  else g.connect(ac.destination);
+  T.p.forEach(([k,ty,v])=>{
+    const o=ac.createOscillator(),h=ac.createGain();o.type=ty;o.frequency.value=f*k;h.gain.value=v;o.connect(h);h.connect(g);
+    if(T.vib){const l=ac.createOscillator(),lg=ac.createGain();l.frequency.value=5.5;lg.gain.value=f*k*.006;l.connect(lg);lg.connect(o.frequency);l.start(t);l.stop(end+.1)}
+    o.start(t);o.stop(end+.1)})}
+
+/* ===== 琴鍵介面 ===== */
+function mk(label,sub,n,np){
+  const b=document.createElement('button');b.className='k';b.dataset.o=n.o;b.dataset.d=n.d;if(np)b.dataset.np=1;
+  b.innerHTML=`<b>${label}</b><small>${sub}</small>`;
+  b.onpointerdown=e=>{e.preventDefault();press(np?{...npNote(n.d),a:acc()}:{...n,a:e.shiftKey?1:e.ctrlKey?-1:0})};
+  return b}
+const mkrow=()=>{const r=document.createElement('div');r.className='row';return r};
+function hint(){
+  $('#hint').textContent=mode=='qwerty'?'Shift＋琴鍵 升半音　Ctrl＋琴鍵 降半音'
+   :`按住 ↑＋數字鍵 高八度　↓＋數字鍵 低八度　+ 升半音　− 降半音　（目前：${oct()>0?'高八度':oct()<0?'低八度':'中音'}${acc()>0?' ♯':acc()<0?' ♭':''}）`}
+function render(){
+  const kb=$('#kb');kb.innerHTML='';
+  if(mode=='qwerty')ROWS.forEach(([s,o])=>{const r=mkrow();[...s].forEach((c,i)=>r.append(mk(c,i+1,{o,d:i+1})));kb.append(r)});
+  else{
+    const w=document.createElement('div'),pad=document.createElement('div'),md=document.createElement('div');
+    w.style.cssText='display:flex;justify-content:center;align-items:center;gap:calc(var(--kg)*3)';
+    md.style.cssText='display:flex;flex-direction:column;gap:var(--kg);margin-bottom:var(--kg)';
+    [['7','',''],['4','5','6'],['1','2','3']].forEach(a=>{   // 保留實體鍵位排列，8/9/0 位置留白
+      const r=mkrow();
+      a.forEach(c=>{if(c)r.append(mk(c,'',npNote(+c),true));else{const e=document.createElement('span');e.className='k';e.style.visibility='hidden';r.append(e)}});
+      pad.append(r)});
+    [['ArrowUp','↑','高八度'],['ArrowDown','↓','低八度']].forEach(([code,l,t])=>{   // 八度修飾鍵（滑鼠按住也可）
+      const b=document.createElement('button');b.className='k mod';b.dataset.m=code;b.innerHTML=`<b>${l}</b><small>${t}</small>`;
+      b.onpointerdown=e=>{e.preventDefault();b.setPointerCapture(e.pointerId);held.add(code);syncNp()};
+      const up=()=>{if(held.delete(code))syncNp()};b.onpointerup=up;b.onpointercancel=up;
+      md.append(b)});
+    w.append(pad,md);kb.append(w)}
+  $('#mq').classList.toggle('act',mode=='qwerty');$('#mn').classList.toggle('act',mode!='qwerty');
+  syncAcc();hint();mark()}
+const keyEl=n=>document.querySelector(`.k[data-o="${n.o}"][data-d="${n.d}"]`);
+function flash(n){const e=keyEl(n);if(!e)return;e.classList.add('on');setTimeout(()=>e.classList.remove('on'),170)}
+function mark(){
+  document.querySelectorAll('.k.next').forEach(e=>e.classList.remove('next'));
+  if(run=='prac'&&beats[ix])beats[ix].forEach(n=>{const e=keyEl(n);e&&e.classList.add('next')})}
+
+/* ===== 樂譜解析（字母譜 / 數字譜自動判斷） ===== */
+function pNum(t){
+  const r=[];let acc=0;
+  for(let i=0;i<t.length;i++){
+    const c=t[i],nx=t[i+1]||'',L=r[r.length-1];
+    if(c=='#'||c=='b'||c=='B'){const v=c=='#'?1:-1;if(/[1-7]/.test(nx))acc=v;else if(L)L.a=v}
+    else if(/[1-7]/.test(c)){r.push({o:1,d:+c,a:acc});acc=0}
+    else if((c=="'"||c=='’'||c=='^')&&L)L.o++;
+    else if((c==','||c=='.')&&L)L.o--}
+  return r}
+function pLet(t){
+  const r=[];
+  for(const c of t.toUpperCase()){const L=r[r.length-1];
+    if(KEYMAP[c])r.push({...KEYMAP[c],a:0});else if(c=='#'&&L)L.a=1;else if(c=='_'&&L)L.a=-1}
+  return r}
+function parse(txt){
+  txt=txt.replace(/[\r\n\t]+/g,' ').trim();if(!txt)return[];
+  const num=/[1-7]/.test(txt)&&!/[ac-zAC-Z]/.test(txt);
+  const out=[];
+  for(const t of txt.split(' ')){
+    const rest=!t||/^0+$/.test(t),r=rest?[]:(num?pNum(t):pLet(t));
+    if(!rest&&!r.length)continue;   // 小節線等無音符的符號不佔拍
+    r.raw=t;out.push(r)}
+  return out}   // 空字串＝休止
+
+/* ===== 播放 / 練習 ===== */
+function sound(n){tone(midi(n));flash(n)}
+// 以縮小版按鍵圖示顯示樂譜目前這一拍（和弦並排，升降記號標在右上角）
+function showNotes(beat){
+  const box=$('#nn');box.textContent='';
+  if(!beat||!beat.length){box.textContent='—';return}
+  beat.forEach(n=>{
+    const e=keyEl(n),el=document.createElement('span');el.className='mk';
+    const t=document.createElement('span');
+    if(e)t.textContent=e.querySelector('b').textContent;
+    else{t.textContent=n.d;t.dataset.dot=n.o>(mode=='numpad'?1+oct():1)?'up':'down'}   // 簡譜：高音點在上、低音點在下
+    el.append(t);
+    if(n.a){const u=document.createElement('sup');u.textContent=n.a>0?'♯':'♭';el.append(u)}
+    box.append(el)})}
+function playing(){runName=$('#ti').value.trim()||'未命名樂譜';runId=curId;$('#np').textContent='♪ '+runName}
+function press(n){sound(n);if(run=='prac')judge(n)}
+function hud(){
+  $('#hc').textContent=st.combo;$('#hm').textContent=st.max;$('#ht').textContent=st.tot;
+  $('#ha').textContent=st.tot?Math.round(st.ok/st.tot*100)+'%':'—';
+  $('#hp').textContent=`${Math.min(ix,beats.length)}/${beats.length}`}
+function stopAll(){clearTimeout(timer);run=null;mark();$('#np').textContent='尚未演奏';$('#nn').textContent='—'}
+function startAuto(){
+  stopAll();beats=parse($('#ta').value);while(beats.length&&!beats[beats.length-1].length)beats.pop();
+  if(!beats.length)return toast('請先輸入或載入樂譜');
+  st={ok:0,tot:0,combo:0,max:0,n:beats.reduce((s,b)=>s+b.length,0)};ix=0;run='auto';t0=Date.now();playing();hud();step()}
+function step(){
+  if(run!='auto')return;
+  if(ix>=beats.length)return finish();
+  showNotes(beats[ix]);beats[ix].forEach(sound);ix++;hud();timer=setTimeout(step,60000/$('#bpm').value)}
+function startPrac(){
+  stopAll();beats=parse($('#ta').value).filter(b=>b.length);
+  if(!beats.length)return toast('請先輸入或載入樂譜');
+  st={ok:0,tot:0,combo:0,max:0,n:beats.reduce((s,b)=>s+b.length,0)};ix=0;run='prac';t0=Date.now();playing();setNeed()}
+function setNeed(){
+  if(ix>=beats.length)return finish();
+  need=new Map(beats[ix].map(n=>[midi(n),false]));showNotes(beats[ix]);mark();hud()}
+function judge(n){
+  const m=midi(n);st.tot++;
+  if(need.has(m)&&!need.get(m)){
+    need.set(m,true);st.ok++;st.combo++;st.max=Math.max(st.max,st.combo);
+    if([...need.values()].every(Boolean)){ix++;setNeed();return}
+  }else st.combo=0;
+  hud()}
+function finish(){
+  const was=run,secs=Math.round((Date.now()-t0)/1000);
+  stopAll();hud();
+  const prac=was=='prac',acc=st.tot?Math.round(st.ok/st.tot*100):0,k=dk(new Date());
+  const L=load('lyre.log',{}),r=L[k]=L[k]||{c:0,s:0};
+  r.c++;r.s+=secs;r.songs=r.songs||{};r.songs[runName]=(r.songs[runName]||0)+1;   // 日曆記錄當天曲目
+  save('lyre.log',L);selDay=k;cal();
+  const sc=S.find(x=>x.id==runId);                                                  // 樂譜庫記錄次數與正確率
+  if(sc){sc.n=(sc.n||0)+1;if(prac){sc.last=acc;sc.best=Math.max(sc.best||0,acc)}saveS();lib()}
+  popup(was=='prac',secs)}
+
+/* ===== 獎勵彈窗 ===== */
+function popup(prac,secs){
+  const acc=st.tot?Math.round(st.ok/st.tot*100):0;
+  $('#pt').textContent=prac&&acc==100?'完美謝幕！':prac&&acc>=90?'太棒了！':'演奏完成！';
+  $('#pm').textContent=['每一個音符，都是向前的一步。','旋律已刻進指尖，明天再彈一首吧。','今天的練習，已經寫進你的日曆。'][Math.floor(Math.random()*3)];
+  $('#ps').innerHTML=`<div><b>${prac?st.tot:st.n}</b>彈奏音符</div><div><b>${prac?st.max:'—'}</b>最高 Combo</div><div><b>${prac?acc+'%':'—'}</b>正確率</div><div><b>${secs}s</b>用時</div>`;
+  const c=$('#card');c.querySelectorAll('.star').forEach(e=>e.remove());
+  for(let i=0;i<30;i++){const s=document.createElement('span');s.className='star';s.textContent=i%3?'✦':'✧';
+    s.style.cssText=`left:${Math.random()*96}%;top:${Math.random()*96}%;font-size:${8+Math.random()*16}px;animation-delay:${Math.random()*2}s`;c.append(s)}
+  $('#pop').classList.add('show');$('#pc').focus()}
+$('#pc').onclick=()=>$('#pop').classList.remove('show');
+
+/* ===== 樂譜庫（localStorage CRUD） ===== */
+const SEED=[
+ {id:'s1',name:'小星星（數字譜）',text:"1 1 5 5 6 6 5  4 4 3 3 2 2 1  5 5 4 4 3 3 2  5 5 4 4 3 3 2  1 1 5 5 6 6 5  4 4 3 3 2 2 1"},
+ {id:'s2',name:'歡樂頌（字母譜）',text:"D D F G G F D S A A S D D S S  D D F G G F D S A A S D S A A"},
+ {id:'s3',name:'和弦與升降音練習（數字譜）',text:"135 246 357 1'35  1 1# 2 2# 3 b3  135"}];
+let S=load('lyre.scores',null)||SEED;
+const saveS=()=>save('lyre.scores',S);
+function lib(){
+  const u=$('#ll');u.innerHTML='';
+  S.forEach(s=>{
+    const li=document.createElement('li');if(s.id==curId)li.className='cur';
+    const a=document.createElement('button');a.className='nm';
+    const t1=document.createElement('span'),t2=document.createElement('small');t1.textContent=s.name;
+    t2.textContent=s.n?`練習 ${s.n} 次`+(s.best!=null?` · 最近 ${s.last}% · 最佳 ${s.best}%`:''):'尚未練習';
+    a.append(t1,t2);
+    a.onclick=()=>{stopAll();curId=s.id;$('#ti').value=s.name;$('#ta').value=s.text;lib()};
+    const r=document.createElement('button');r.className='ic';r.textContent='✎';r.title='重新命名';r.setAttribute('aria-label','重新命名');
+    r.onclick=()=>{const n=prompt('新的樂譜名稱',s.name);if(n&&n.trim()){s.name=n.trim();saveS();if(s.id==curId)$('#ti').value=s.name;lib()}};
+    const d=document.createElement('button');d.className='ic';d.textContent='✕';d.title='刪除';d.setAttribute('aria-label','刪除');
+    d.onclick=()=>{if(confirm(`刪除「${s.name}」？`)){S=S.filter(x=>x!=s);if(curId==s.id)curId=null;saveS();lib()}};
+    li.append(a,r,d);u.append(li)});
+  if(!S.length)u.innerHTML='<li style="color:var(--mute)">樂譜庫是空的，輸入樂譜後按「儲存樂譜」。</li>'}
+$('#sv').onclick=()=>{
+  const name=$('#ti').value.trim()||'未命名樂譜',text=$('#ta').value;
+  if(!text.trim())return toast('樂譜內容是空的');
+  const cur=S.find(s=>s.id==curId);
+  if(cur){cur.name=name;cur.text=text}else{curId='u'+Date.now();S.push({id:curId,name,text})}
+  saveS();lib();toast('已儲存')};
+$('#tf').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{stopAll();$('#ta').value=r.result;$('#ti').value=f.name.replace(/\.txt$/i,'');curId=null;lib();toast('已載入樂譜')};
+  r.readAsText(f);e.target.value=''};
+
+/* ===== 日曆 ===== */
+const dk=d=>`${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
+function cal(){
+  const L=load('lyre.log',{}),y=cm.getFullYear(),m=cm.getMonth(),g=$('#cg'),today=dk(new Date());
+  selDay=selDay||today;
+  $('#cm').textContent=`${y} 年 ${m+1} 月`;
+  g.innerHTML='日一二三四五六'.split('').map(d=>`<i class="w">${d}</i>`).join('');
+  for(let i=0;i<new Date(y,m,1).getDay();i++)g.insertAdjacentHTML('beforeend','<i></i>');
+  for(let d=1,n=new Date(y,m+1,0).getDate();d<=n;d++){
+    const k=`${y}-${m+1}-${d}`,c=L[k]?L[k].c:0,b=document.createElement('button');
+    b.className=`d l${Math.min(c,4)}${k==today?' t':''}${k==selDay?' sel':''}`;b.textContent=d;
+    b.title=c?`${c} 次`:'尚無練習';b.onclick=()=>{selDay=k;cal()};g.append(b)}
+  const all=Object.values(L);
+  $('#cs').textContent=`累計 ${all.reduce((s,r)=>s+r.c,0)} 次 · ${Math.round(all.reduce((s,r)=>s+r.s,0)/60)} 分鐘 · 練習 ${all.length} 天`;
+  const r=L[selDay],[,sm,sd]=selDay.split('-'),songs=r&&r.songs?Object.entries(r.songs).map(([n,c])=>`${n} ×${c}`):[];
+  $('#cd').textContent=`${sm}/${sd}　`+(r?`${r.c} 次 · ${Math.round(r.s/6)/10} 分鐘`+(songs.length?'：'+songs.join('、'):'（無曲目紀錄）'):'當天沒有練習')}
+$('#cp').onclick=()=>{cm=new Date(cm.getFullYear(),cm.getMonth()-1,1);cal()};
+$('#cn').onclick=()=>{cm=new Date(cm.getFullYear(),cm.getMonth()+1,1);cal()};
+
+/* ===== 鍵盤事件 ===== */
+addEventListener('keydown',e=>{
+  updQ(e);
+  if(/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))return;
+  if(e.code=='Escape')return stopAll();
+  if(mode=='qwerty'){
+    const m=/^Key([A-Z])$/.exec(e.code);
+    if(m&&KEYMAP[m[1]]&&!e.altKey&&!e.metaKey){e.preventDefault();if(!e.repeat)press({...KEYMAP[m[1]],a:e.shiftKey?1:e.ctrlKey?-1:0})}
+  }else{
+    const m=/^Numpad(\d)$/.exec(e.code);
+    if(m){e.preventDefault();if(!e.repeat&&+m[1]>=1&&+m[1]<=7)press({...npNote(+m[1]),a:acc()})}
+    else if(MODS.includes(e.code)){e.preventDefault();if(!held.has(e.code)){held.add(e.code);modChange()}}
+  }});
+
+// 修飾鍵放開 / 視窗失焦時清除狀態；八度改變時重畫琴鍵（更新提示與亮起位置）
+// 就地更新數字區（不重建 DOM）：八度鍵亮起、琴鍵位置與提示隨按住狀態變化；放開即回到中音
+function syncNp(){
+  if(mode!='numpad')return;
+  document.querySelectorAll('.k[data-np]').forEach(b=>{b.dataset.o=1+oct();const d=b.querySelector('b');if(oct())d.dataset.dot=oct()>0?'up':'down';else d.removeAttribute('data-dot')});
+  document.querySelectorAll('.k.mod').forEach(b=>b.classList.toggle('hold',held.has(b.dataset.m)));
+  syncAcc();hint();mark()}
+const modChange=syncNp;
+addEventListener('keyup',e=>{if(held.delete(e.code))modChange();updQ(e)});
+const relax=()=>{qacc=0;held.clear();syncNp();syncAcc()};
+addEventListener('blur',relax);document.addEventListener('visibilitychange',relax);
+
+/* ===== 控制項 ===== */
+$('#mq').onclick=()=>{held.clear();lastOct=0;mode='qwerty';render()};
+$('#mn').onclick=()=>{held.clear();lastOct=0;mode='numpad';render()};
+$('#bp').onclick=startAuto;$('#bx').onclick=startPrac;$('#bs').onclick=stopAll;
+$('#bpm').oninput=e=>$('#bv').textContent=e.target.value;
+const root=document.documentElement.style;
+$('#sk').oninput=e=>root.setProperty('--ks',e.target.value+'px');
+$('#sg').oninput=e=>root.setProperty('--kg',e.target.value+'px');
+$('#sr').oninput=e=>root.setProperty('--kr',e.target.value+'px');
+$('#sb').oninput=e=>$('#bg').style.filter=`blur(${e.target.value}px)`;
+$('#so').oninput=e=>$('#ov').style.opacity=e.target.value/100;
+$('#bgf').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{$('#bg').style.backgroundImage=`url(${r.result})`;save('lyre.bg',r.result)};r.readAsDataURL(f)};
+const bg=load('lyre.bg',null);if(bg)$('#bg').style.backgroundImage=`url(${bg})`;
+
+function theme(t){   // 夜間 / 白天風格切換
+  t=t=='day'?'day':'night';document.documentElement.dataset.theme=t;save('lyre.theme',t);
+  $('#th').textContent=t=='day'?'☀ 白天模式':'☾ 夜間模式';$('#th').setAttribute('aria-pressed',t=='day')}
+$('#th').onclick=()=>theme(document.documentElement.dataset.theme=='day'?'night':'day');
+theme(load('lyre.theme','night'));
+$('#tm').value=timbre;
+$('#tm').onchange=e=>{timbre=e.target.value;save('lyre.tm',timbre);tone(60)};
+render();lib();cal();
+</script>
+</body></html>
